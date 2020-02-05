@@ -120,8 +120,8 @@ Pod::HooksManager.register('cocoapods-rome', :post_install) do |installer_contex
   frameworks.uniq!
   resources.uniq!
 
-  Pod::UI.puts "Copying #{frameworks.count} #{'frameworks'.pluralize(frameworks.count)} " \
-    "to `#{destination.relative_path_from Pathname.pwd}`"
+  Pod::UI.puts "Copying #{xcframeworks.count} #{'xcframeworks'.pluralize(xcframeworks.count)} " \
+      "to `#{destination.relative_path_from Pathname.pwd}`"
 
   FileUtils.mkdir_p destination
   (frameworks + resources + xcframeworks).each do |file|

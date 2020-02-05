@@ -10,23 +10,20 @@ def build_for_iosish_platform(sandbox, build_dir, target, device, simulator, con
 
   xcodebuild(sandbox, target_label, device, deployment_target, configuration)
   xcodebuild(sandbox, target_label, simulator, deployment_target, configuration)
+  xcodebuild_catalyst(sandbox, target_label, configuration)
 
   spec_names = target.specs.map { |spec| [spec.root.name, spec.root.module_name] }.uniq
   spec_names.each do |root_name, module_name|
-    executable_path = "#{build_dir}/#{root_name}"
-    device_lib = "#{build_dir}/#{configuration}-#{device}/#{root_name}/#{module_name}.framework/#{module_name}"
-    device_framework_lib = File.dirname(device_lib)
-    simulator_lib = "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/#{module_name}.framework/#{module_name}"
+    xcframework_path = "#{build_dir}/#{module_name}.xcframework"
+    device_framework_lib = "#{build_dir}/#{configuration}-#{device}/#{root_name}/#{module_name}.framework"
+    simulator_framework_lib = "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/#{module_name}.framework"
+    catalyst_framework_lib = "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/#{module_name}.framework"
+    xcframework(xcframework_path, [device_framework_lib, simulator_framework_lib, catalyst_framework_lib])
+    next unless File.directory?(device_framework_lib) && File.directory?(simulator_framework_lib) && File.directory?(catalyst_framework_lib)
 
-    next unless File.file?(device_lib) && File.file?(simulator_lib)
-
-    lipo_log = `lipo -create -output #{executable_path} #{device_lib} #{simulator_lib}`
-    puts lipo_log unless File.exist?(executable_path)
-
-    FileUtils.mv executable_path, device_lib, :force => true
-    FileUtils.mv device_framework_lib, build_dir, :force => true
-    FileUtils.rm simulator_lib if File.file?(simulator_lib)
-    FileUtils.rm device_lib if File.file?(device_lib)
+    FileUtils.rmtree device_framework_lib if File.directory?(device_framework_lib)
+    FileUtils.rmtree simulator_framework_lib if File.directory?(simulator_framework_lib)
+    FileUtils.rmtree catalyst_framework_lib if File.directory?(catalyst_framework_lib)
   end
 end
 
@@ -34,6 +31,19 @@ def xcodebuild(sandbox, target, sdk='macosx', deployment_target=nil, configurati
   args = %W(-project #{sandbox.project_path.realdirpath} -scheme #{target} -configuration #{configuration} -sdk #{sdk})
   platform = PLATFORMS[sdk]
   args += Fourflusher::SimControl.new.destination(:oldest, platform, deployment_target) unless platform.nil?
+  Pod::Executable.execute_command 'xcodebuild', args, true
+end
+
+def xcodebuild_catalyst(sandbox, target, destination='platform=macOS,variant=Mac Catalyst', configuration)
+  args = %W(-project #{sandbox.project_path.realdirpath} -destination #{destination} -scheme #{target} -configuration #{configuration} ARCHS="x86_64")
+  Pod::Executable.execute_command 'xcodebuild', args, true
+end
+
+def xcframework(output, framework_paths=[])
+  args = %W(-create-xcframework -output #{output})
+  framework_paths.each do |path|
+    args += ["-framework", path]
+  end
   Pod::Executable.execute_command 'xcodebuild', args, true
 end
 
@@ -49,7 +59,7 @@ end
 
 def copy_dsym_files(dsym_destination, configuration)
   dsym_destination.rmtree if dsym_destination.directory?
-  platforms = ['iphoneos', 'iphonesimulator']
+  platforms = ['iphoneos', 'iphonesimulator', 'maccatalyst']
   platforms.each do |platform|
     dsym = Pathname.glob("build/#{configuration}-#{platform}/**/*.dSYM")
     dsym.each do |dsym|
@@ -90,11 +100,8 @@ Pod::HooksManager.register('cocoapods-rome', :post_install) do |installer_contex
 
   raise Pod::Informative, 'The build directory was not found in the expected location.' unless build_dir.directory?
 
-  # Make sure the device target overwrites anything in the simulator build, otherwise iTunesConnect
-  # can get upset about Info.plist containing references to the simulator SDK
-  frameworks = Pathname.glob("build/*/*/*.framework").reject { |f| f.to_s =~ /Pods[^.]+\.framework/ }
-  frameworks += Pathname.glob("build/*.framework").reject { |f| f.to_s =~ /Pods[^.]+\.framework/ }
-
+  frameworks = []
+  xcframeworks = Pathname.glob("build/*.xcframework")
   resources = []
 
   Pod::UI.puts "Built #{frameworks.count} #{'frameworks'.pluralize(frameworks.count)}"
@@ -117,7 +124,7 @@ Pod::HooksManager.register('cocoapods-rome', :post_install) do |installer_contex
     "to `#{destination.relative_path_from Pathname.pwd}`"
 
   FileUtils.mkdir_p destination
-  (frameworks + resources).each do |file|
+  (frameworks + resources + xcframeworks).each do |file|
     FileUtils.cp_r file, destination, :remove_destination => true
   end
 

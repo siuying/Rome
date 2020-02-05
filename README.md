@@ -5,10 +5,14 @@
 Rome makes it easy to build a list of frameworks for consumption outside of
 Xcode, e.g. for a Swift script.
 
+This is a fork of Rome that specifically build xcframework for iOS/Catalyst.
+
 ## Installation
 
+Add following to your gem file:
+
 ```bash
-$ gem install cocoapods-rome
+gem 'cocoapods-rome', github: "siuying/Rome", branch: "gn_master"
 ```
 
 ## Important
@@ -19,36 +23,12 @@ In the examples below the target 'caesar' could either be an existing target of 
 
 Write a simple Podfile, like this:
 
-### MacOS
-
-```ruby
-platform :osx, '10.10'
-
-plugin 'cocoapods-rome'
-
-target 'caesar' do
-  pod 'Alamofire'
-end
-```
-
 ### iOS 
 
 ```ruby
-platform :ios, '8.0'
+platform :ios, '12.0'
 
-plugin 'cocoapods-rome', { :pre_compile => Proc.new { |installer|
-    installer.pods_project.targets.each do |target|
-        target.build_configurations.each do |config|
-            config.build_settings['SWIFT_VERSION'] = '4.0'
-        end
-    end
-
-    installer.pods_project.save
-},
-
-    dsym: false,
-    configuration: 'Release'
-}
+plugin 'cocoapods-rome', { dsym: false, configuration: 'Release' }
 
 target 'caesar' do
   pod 'Alamofire'
@@ -61,12 +41,12 @@ then run this:
 pod install
 ```
 
-and you will end up with dynamic frameworks:
+and you will end up with xcframeworks:
 
 ```
 $ tree Rome/
 Rome/
-└── Alamofire.framework
+└── Alamofire.xcframework
 ```
 
 ## Advanced Usage
@@ -75,7 +55,7 @@ Rome/
 For your production builds, when you want dSYMs created and stored:
 
 ```ruby
-platform :osx, '10.10'
+platform :ios, '12.0'
 
 plugin 'cocoapods-rome', {
   dsym: true,
@@ -100,6 +80,13 @@ dSYM/
 │               └── DWARF
 │                   └── Alamofire
 └── iphonesimulator
+│   └── Alamofire.framework.dSYM
+│       └── Contents
+│           ├── Info.plist
+│           └── Resources
+│               └── DWARF
+│                   └── Alamofire
+└── maccatalyst
     └── Alamofire.framework.dSYM
         └── Contents
             ├── Info.plist
@@ -123,29 +110,3 @@ It receives the `Pod::Installer` as its only argument.
 This hook allows you to run code after the compilation of the frameworks finished and they have been moved to the `Rome` folder.
 
 It receives the `Pod::Installer` as its only argument.
-
-#### Example
-
-Customising the Swift version of all pods
-
-```ruby
-platform :osx, '10.10'
-
-plugin 'cocoapods-rome', 
-    :pre_compile => Proc.new { |installer|
-        installer.pods_project.targets.each do |target|
-            target.build_configurations.each do |config|
-                config.build_settings['SWIFT_VERSION'] = '4.0'
-            end
-        end
-
-        installer.pods_project.save
-    },
-    :post_compile => Proc.new { |installer|
-        puts "Rome finished building all the frameworks"
-    }
-
-target 'caesar' do
-    pod 'Alamofire'
-end
-```

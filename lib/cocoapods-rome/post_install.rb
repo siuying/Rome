@@ -4,7 +4,7 @@ PLATFORMS = { 'iphonesimulator' => 'iOS',
               'appletvsimulator' => 'tvOS',
               'watchsimulator' => 'watchOS' }
 
-def build_for_iosish_platform(sandbox, build_dir, target, device, simulator, configuration)
+def build_for_iosish_platform(sandbox, build_dir, target, device, simulator, configuration, static=true)
   deployment_target = target.platform_deployment_target
   target_label = target.cocoapods_target_label
 
@@ -15,15 +15,16 @@ def build_for_iosish_platform(sandbox, build_dir, target, device, simulator, con
   spec_names = target.specs.map { |spec| [spec.root.name, spec.root.module_name] }.uniq
   spec_names.each do |root_name, module_name|
     xcframework_path = "#{build_dir}/#{module_name}.xcframework"
-    device_framework_lib = "#{build_dir}/#{configuration}-#{device}/#{root_name}/#{module_name}.framework"
-    simulator_framework_lib = "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/#{module_name}.framework"
-    catalyst_framework_lib = "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/#{module_name}.framework"
-    xcframework(xcframework_path, [device_framework_lib, simulator_framework_lib, catalyst_framework_lib])
-    next unless File.directory?(device_framework_lib) && File.directory?(simulator_framework_lib) && File.directory?(catalyst_framework_lib)
-
-    FileUtils.rmtree device_framework_lib if File.directory?(device_framework_lib)
-    FileUtils.rmtree simulator_framework_lib if File.directory?(simulator_framework_lib)
-    FileUtils.rmtree catalyst_framework_lib if File.directory?(catalyst_framework_lib)
+    if static
+      device_framework_lib = "#{build_dir}/#{configuration}-#{device}/#{root_name}/lib#{module_name}.a"
+      simulator_framework_lib = "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/lib#{module_name}.a"
+      catalyst_framework_lib = "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/lib#{module_name}.a"
+    else
+      device_framework_lib = "#{build_dir}/#{configuration}-#{device}/#{root_name}/#{module_name}.framework"
+      simulator_framework_lib = "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/#{module_name}.framework"
+      catalyst_framework_lib = "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/#{module_name}.framework"  
+    end
+    xcframework(xcframework_path, [device_framework_lib, simulator_framework_lib, catalyst_framework_lib], static)
   end
 end
 
@@ -39,10 +40,16 @@ def xcodebuild_catalyst(sandbox, target, destination='platform=macOS,variant=Mac
   Pod::Executable.execute_command 'xcodebuild', args, true
 end
 
-def xcframework(output, framework_paths=[])
+def xcframework(output, framework_paths=[], static)
   args = %W(-create-xcframework -output #{output})
-  framework_paths.each do |path|
-    args += ["-framework", path]
+  if static
+    framework_paths.each do |path|
+      args += ["-library", path]
+    end
+  else
+    framework_paths.each do |path|
+      args += ["-framework", path]
+    end
   end
   Pod::Executable.execute_command 'xcodebuild', args, true
 end
@@ -55,6 +62,14 @@ def enable_debug_information(project_path, configuration)
     config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
   end
   project.save
+end
+
+def static?(project_path)
+  project = Xcodeproj::Project.open(project_path)
+  return project.targets.first do |target|
+    config = target.build_configurations.find { |config| config.name.eql? configuration }
+    return config.build_settings['MACH_O_TYPE'] == 'staticlib'
+  end
 end
 
 def copy_dsym_files(dsym_destination, configuration)
@@ -80,21 +95,24 @@ Pod::HooksManager.register('cocoapods-rome', :post_install) do |installer_contex
   sandbox_root = Pathname(installer_context.sandbox_root)
   sandbox = Pod::Sandbox.new(sandbox_root)
 
+  is_static = static?(sandbox.project_path)
   enable_debug_information(sandbox.project_path, configuration) if enable_dsym
 
   build_dir = sandbox_root.parent + 'build'
   destination = sandbox_root.parent + 'Rome'
 
-  Pod::UI.puts 'Building frameworks'
+  fw_type = is_static ? "static" : "dynamic"
+  Pod::UI.puts "Building #{fw_type} frameworks"
 
   build_dir.rmtree if build_dir.directory?
+
   targets = installer_context.umbrella_targets.select { |t| t.specs.any? }
   targets.each do |target|
     case target.platform_name
-    when :ios then build_for_iosish_platform(sandbox, build_dir, target, 'iphoneos', 'iphonesimulator', configuration)
+    when :ios then build_for_iosish_platform(sandbox, build_dir, target, 'iphoneos', 'iphonesimulator', configuration, is_static)
     when :osx then xcodebuild(sandbox, target.cocoapods_target_label, configuration)
-    when :tvos then build_for_iosish_platform(sandbox, build_dir, target, 'appletvos', 'appletvsimulator', configuration)
-    when :watchos then build_for_iosish_platform(sandbox, build_dir, target, 'watchos', 'watchsimulator', configuration)
+    when :tvos then build_for_iosish_platform(sandbox, build_dir, target, 'appletvos', 'appletvsimulator', configuration, is_static)
+    when :watchos then build_for_iosish_platform(sandbox, build_dir, target, 'watchos', 'watchsimulator', configuration, is_static)
     else raise "Unknown platform '#{target.platform_name}'" end
   end
 

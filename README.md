@@ -25,8 +25,12 @@ Write a simple Podfile, like this:
 
 ### iOS 
 
+#### Make a dynamic xcframework
+
 ```ruby
 platform :ios, '12.0'
+
+use_frameworks!
 
 plugin 'cocoapods-rome', { dsym: false, configuration: 'Release' }
 
@@ -47,6 +51,19 @@ and you will end up with xcframeworks:
 $ tree Rome/
 Rome/
 └── Alamofire.xcframework
+```
+
+#### Make a static xcframework
+
+
+```ruby
+platform :ios, '12.0'
+
+plugin 'cocoapods-rome', { dsym: false, configuration: 'Release' }
+
+target 'caesar' do
+  pod 'Alamofire'
+end
 ```
 
 ## Advanced Usage

@@ -163,7 +163,7 @@ Pod::HooksManager.register('cocoapods-reims', :post_install) do |installer_conte
 
   copy_dsym_files(sandbox_root.parent + 'dSYM', configuration) if enable_dsym
 
-  # build_dir.rmtree if build_dir.directory?
+  build_dir.rmtree if build_dir.directory?
 
   if user_options["post_compile"]
     user_options["post_compile"].call(installer_context)

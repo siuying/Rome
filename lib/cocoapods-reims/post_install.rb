@@ -1,4 +1,5 @@
 require 'fourflusher'
+require 'pry'
 
 PLATFORMS = { 'iphonesimulator' => 'iOS',
               'appletvsimulator' => 'tvOS',
@@ -15,16 +16,22 @@ def build_for_iosish_platform(sandbox, build_dir, target, device, simulator, con
   spec_names = target.specs.map { |spec| [spec.root.name, spec.root.module_name] }.uniq
   spec_names.each do |root_name, module_name|
     xcframework_path = "#{build_dir}/#{module_name}.xcframework"
+    frameworks_path = []
+    headers_path = nil
     if static
-      device_framework_lib = "#{build_dir}/#{configuration}-#{device}/#{root_name}/lib#{module_name}.a"
-      simulator_framework_lib = "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/lib#{module_name}.a"
-      catalyst_framework_lib = "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/lib#{module_name}.a"
+      # cocoapods header paths are symbolic link, copy them to a temp folder first
+      headers_path = sandbox.root.parent + 'headers'
+      copy_header_files(sandbox, module_name, headers_path)
+      frameworks_path << "#{build_dir}/#{configuration}-#{device}/#{root_name}/lib#{module_name}.a"
+      frameworks_path << "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/lib#{module_name}.a"
+      frameworks_path << "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/lib#{module_name}.a"
     else
-      device_framework_lib = "#{build_dir}/#{configuration}-#{device}/#{root_name}/#{module_name}.framework"
-      simulator_framework_lib = "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/#{module_name}.framework"
-      catalyst_framework_lib = "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/#{module_name}.framework"  
+      frameworks_path << "#{build_dir}/#{configuration}-#{device}/#{root_name}/#{module_name}.framework"
+      frameworks_path << "#{build_dir}/#{configuration}-#{simulator}/#{root_name}/#{module_name}.framework"
+      frameworks_path << "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/#{module_name}.framework"  
     end
-    xcframework(xcframework_path, [device_framework_lib, simulator_framework_lib, catalyst_framework_lib], static)
+    xcframework(xcframework_path, frameworks_path, headers_path, static)
+    headers_path.rmtree if headers_path
   end
 end
 
@@ -40,17 +47,19 @@ def xcodebuild_catalyst(sandbox, target, destination='platform=macOS,variant=Mac
   Pod::Executable.execute_command 'xcodebuild', args, true
 end
 
-def xcframework(output, framework_paths=[], static)
+def xcframework(output, framework_paths=[], headers_path, static)
   args = %W(-create-xcframework -output #{output})
   if static
     framework_paths.each do |path|
       args += ["-library", path]
+      args += ["-headers", headers_path] if headers_path
     end
   else
     framework_paths.each do |path|
       args += ["-framework", path]
     end
   end
+  # puts "xcodebuild #{args.join(' ')}"
   Pod::Executable.execute_command 'xcodebuild', args, true
 end
 
@@ -80,8 +89,17 @@ def copy_dsym_files(dsym_destination, configuration)
     dsym.each do |dsym|
       destination = dsym_destination + platform
       FileUtils.mkdir_p destination
-      FileUtils.cp_r dsym, destination, :remove_destination => true
+      FileUtils.cp_r dsym, destination, :remove_destination => false
     end
+  end
+end
+
+def copy_header_files(sandbox, module_name, destination)
+  headers_path = sandbox.root.realdirpath + "Headers/Public/#{module_name}"
+  headers = Pathname.glob("#{headers_path}/*")
+  headers.each do |header|
+    FileUtils.mkdir_p destination
+    FileUtils.cp header, destination
   end
 end
 

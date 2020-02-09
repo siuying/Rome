@@ -1,18 +1,16 @@
-# cocoapods-rome
+# cocoapods-reims
 
-![](yolo.jpg)
+Reims build a list of xcframeworks for distribution.
 
-Rome makes it easy to build a list of frameworks for consumption outside of
-Xcode, e.g. for a Swift script.
-
-This is a fork of Rome that specifically build xcframework for iOS/Catalyst.
+This is a fork of Rome that build xcframework for iOS/Catalyst, it could 
+work on other platform but it is not tested.
 
 ## Installation
 
 Add following to your gem file:
 
 ```bash
-gem 'cocoapods-rome', github: "siuying/Rome", branch: "gn_master"
+gem 'cocoapods-reims'
 ```
 
 ## Important
@@ -32,7 +30,7 @@ platform :ios, '12.0'
 
 use_frameworks!
 
-plugin 'cocoapods-rome', { dsym: false, configuration: 'Release' }
+plugin 'cocoapods-reims', { dsym: false, configuration: 'Release' }
 
 target 'caesar' do
   pod 'Alamofire'
@@ -48,8 +46,8 @@ pod install
 and you will end up with xcframeworks:
 
 ```
-$ tree Rome/
-Rome/
+$ tree Frameworks/
+Frameworks/
 └── Alamofire.xcframework
 ```
 

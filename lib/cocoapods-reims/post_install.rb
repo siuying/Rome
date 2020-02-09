@@ -85,7 +85,7 @@ def copy_dsym_files(dsym_destination, configuration)
   end
 end
 
-Pod::HooksManager.register('cocoapods-rome', :post_install) do |installer_context, user_options|
+Pod::HooksManager.register('cocoapods-reims', :post_install) do |installer_context, user_options|
   enable_dsym = user_options.fetch('dsym', true)
   configuration = user_options.fetch('configuration', 'Debug')
   if user_options["pre_compile"]
@@ -99,10 +99,10 @@ Pod::HooksManager.register('cocoapods-rome', :post_install) do |installer_contex
   enable_debug_information(sandbox.project_path, configuration) if enable_dsym
 
   build_dir = sandbox_root.parent + 'build'
-  destination = sandbox_root.parent + 'Rome'
+  destination = sandbox_root.parent + 'Frameworks'
 
   fw_type = is_static ? "static" : "dynamic"
-  Pod::UI.puts "Building #{fw_type} frameworks"
+  Pod::UI.puts "Building #{fw_type} xcframeworks"
 
   build_dir.rmtree if build_dir.directory?
 
@@ -122,7 +122,7 @@ Pod::HooksManager.register('cocoapods-rome', :post_install) do |installer_contex
   xcframeworks = Pathname.glob("build/*.xcframework")
   resources = []
 
-  Pod::UI.puts "Built #{frameworks.count} #{'frameworks'.pluralize(frameworks.count)}"
+  Pod::UI.puts "Built #{xcframeworks.count} #{'xcframeworks'.pluralize(frameworks.count)}"
 
   destination.rmtree if destination.directory?
 

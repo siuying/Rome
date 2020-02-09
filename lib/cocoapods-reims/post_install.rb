@@ -1,5 +1,4 @@
 require 'fourflusher'
-require 'pry'
 
 PLATFORMS = { 'iphonesimulator' => 'iOS',
               'appletvsimulator' => 'tvOS',

@@ -6,4 +6,3 @@ gemspec
 group :development do
   gem 'bacon'
 end
-

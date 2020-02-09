@@ -30,7 +30,7 @@ def build_for_iosish_platform(sandbox, build_dir, target, device, simulator, con
       frameworks_path << "#{build_dir}/#{configuration}-maccatalyst/#{root_name}/#{module_name}.framework"  
     end
     xcframework(xcframework_path, frameworks_path, headers_path, static)
-    headers_path.rmtree if headers_path
+    headers_path.rmtree if headers_path && headers_path.directory?
   end
 end
 
@@ -72,12 +72,10 @@ def enable_debug_information(project_path, configuration)
   project.save
 end
 
-def static?(project_path)
+def static?(project_path, configuration)
   project = Xcodeproj::Project.open(project_path)
-  return project.targets.first do |target|
-    config = target.build_configurations.find { |config| config.name.eql? configuration }
-    return config.build_settings['MACH_O_TYPE'] == 'staticlib'
-  end
+  target = project.targets.find { |t| t.name =~ /^Pods/ }
+  return target.product_type == "com.apple.product-type.library.static"
 end
 
 def copy_dsym_files(dsym_destination, configuration)
@@ -112,7 +110,7 @@ Pod::HooksManager.register('cocoapods-reims', :post_install) do |installer_conte
   sandbox_root = Pathname(installer_context.sandbox_root)
   sandbox = Pod::Sandbox.new(sandbox_root)
 
-  is_static = static?(sandbox.project_path)
+  is_static = static?(sandbox.project_path, configuration)
   enable_debug_information(sandbox.project_path, configuration) if enable_dsym
 
   build_dir = sandbox_root.parent + 'build'
@@ -165,7 +163,7 @@ Pod::HooksManager.register('cocoapods-reims', :post_install) do |installer_conte
 
   copy_dsym_files(sandbox_root.parent + 'dSYM', configuration) if enable_dsym
 
-  build_dir.rmtree if build_dir.directory?
+  # build_dir.rmtree if build_dir.directory?
 
   if user_options["post_compile"]
     user_options["post_compile"].call(installer_context)
